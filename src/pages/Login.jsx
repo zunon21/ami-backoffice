@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
   const [email, setEmail] = useState('');
-  const [step, setStep] = useState('request'); // 'request' ou 'verify'
+  const [step, setStep] = useState('request');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
