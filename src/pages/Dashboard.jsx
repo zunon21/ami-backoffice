@@ -23,9 +23,30 @@ export default function Dashboard() {
   });
   const [imageFile, setImageFile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [autoLoginDone, setAutoLoginDone] = useState(false);
   const navigate = useNavigate();
 
+  // 1. Auto-login : récupère un token admin si absent
   useEffect(() => {
+    const autoLogin = async () => {
+      if (!localStorage.getItem('adminToken')) {
+        try {
+          const res = await api.post('/auth/admin/login', { password: 'admin123' });
+          localStorage.setItem('adminToken', res.data.token);
+          console.log('Token admin obtenu automatiquement');
+        } catch (err) {
+          console.error('Erreur lors de l’auto-login :', err.response?.data || err.message);
+        }
+      }
+      setAutoLoginDone(true);
+    };
+    autoLogin();
+  }, []);
+
+  // 2. Chargement des données (uniquement après auto-login)
+  useEffect(() => {
+    if (!autoLoginDone) return;
+
     const fetchData = async () => {
       try {
         const [projectsRes, donationsRes, usersRes, commitmentsRes] = await Promise.all([
@@ -40,8 +61,22 @@ export default function Dashboard() {
         setCommitments(commitmentsRes.data);
       } catch (err) {
         if (err.response?.status === 401) {
+          // Token invalide : on le supprime et on réessaie l'auto-login
           localStorage.removeItem('adminToken');
-          navigate('/');
+          setAutoLoginDone(false);
+          // Déclencher un nouvel auto-login
+          const retry = async () => {
+            try {
+              const res = await api.post('/auth/admin/login', { password: 'admin123' });
+              localStorage.setItem('adminToken', res.data.token);
+              setAutoLoginDone(true);
+              // Recharger les données
+              fetchData();
+            } catch (e) {
+              console.error('Impossible de se reconnecter');
+            }
+          };
+          retry();
         } else {
           console.error('Erreur chargement :', err);
         }
@@ -50,7 +85,7 @@ export default function Dashboard() {
       }
     };
     fetchData();
-  }, [navigate]);
+  }, [autoLoginDone, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
