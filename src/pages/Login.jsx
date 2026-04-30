@@ -1,51 +1,31 @@
-﻿import { useState } from 'react';
-import api from '../services/api';
+﻿import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
 export default function Login() {
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      const res = await api.post('/auth/admin/login', { password });
-      localStorage.setItem('adminToken', res.data.token);
-      navigate('/dashboard');
-    } catch (err) {
-      setError('Mot de passe incorrect');
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    const autoLogin = async () => {
+      try {
+        // Envoi du mot de passe fixe pour obtenir un token
+        const res = await api.post('/auth/admin/login', { password: 'AMI1990' });
+        localStorage.setItem('adminToken', res.data.token);
+        // Redirection vers le tableau de bord
+        navigate('/dashboard');
+      } catch (err) {
+        console.error('Échec de la connexion automatique', err);
+        // En cas d’erreur, vous pouvez afficher un message ou rester sur la page
+      }
+    };
+    autoLogin();
+  }, [navigate]);
 
+  // Pendant la connexion, on affiche un message de chargement
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white p-8 rounded shadow-md w-96">
-        <h1 className="text-2xl font-bold mb-6 text-center">Backoffice AMI</h1>
-        <form onSubmit={handleSubmit}>
-          <input
-            type="password"
-            placeholder="Mot de passe"
-            className="w-full p-2 border rounded mb-4"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoFocus
-          />
-          {error && <p className="text-red-500 mb-4">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 disabled:bg-blue-300"
-          >
-            {loading ? 'Connexion...' : 'Se connecter'}
-          </button>
-        </form>
+      <div className="bg-white p-8 rounded shadow-md text-center">
+        <p className="text-gray-600">Connexion automatique en cours...</p>
       </div>
     </div>
   );
