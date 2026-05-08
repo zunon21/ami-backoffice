@@ -10,7 +10,6 @@ export default function Partenaires() {
     const fetchUsers = async () => {
       try {
         const res = await api.get('/auth/users');
-        // S'assurer que chaque utilisateur a un UserProfile (même vide)
         const enriched = res.data.map(u => ({
           ...u,
           UserProfile: u.UserProfile || {}
@@ -26,14 +25,15 @@ export default function Partenaires() {
   }, []);
 
   const exportToExcel = () => {
-    const exportData = users.map(u => ({
+    const exportData = users.map((u, idx) => ({
+      '#': idx + 1,
       'Nom': u.full_name || '',
       'Prénoms': u.UserProfile?.first_name || '',
       'Sexe': u.UserProfile?.gender || '',
       'Âge': u.UserProfile?.age || '',
-      'Ville de résidence': u.UserProfile?.city || '',
+      'Ville': u.UserProfile?.city || '',
       'Profession': u.UserProfile?.profession || '',
-      'Église / organisation': u.UserProfile?.church_org || '',
+      'Église/Org.': u.UserProfile?.church_org || '',
       'Téléphone': u.phone,
       'Date inscription': new Date(u.createdAt).toLocaleDateString()
     }));
@@ -62,6 +62,7 @@ export default function Partenaires() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nom</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Prénoms</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sexe</th>
@@ -69,14 +70,16 @@ export default function Partenaires() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ville</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Profession</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Église/Org.</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Téléphone</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {users.length === 0 ? (
-                <tr><td colSpan="7" className="text-center py-6 text-gray-500">Aucun partenaire inscrit</td></tr>
+                <tr><td colSpan="9" className="text-center py-6 text-gray-500">Aucun partenaire inscrit</td></tr>
               ) : (
                 users.map((user, idx) => (
                   <tr key={user.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="px-4 py-3 text-sm text-gray-900">{idx + 1}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{user.full_name || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{user.UserProfile?.first_name || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{user.UserProfile?.gender || '—'}</td>
@@ -84,6 +87,7 @@ export default function Partenaires() {
                     <td className="px-4 py-3 text-sm text-gray-900">{user.UserProfile?.city || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{user.UserProfile?.profession || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{user.UserProfile?.church_org || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{user.phone}</td>
                   </tr>
                 ))
               )}

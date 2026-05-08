@@ -58,12 +58,14 @@ export default function HistoriqueEngagements() {
 
   const exportToExcel = (data, filename) => {
     if (!data.length) return alert('Aucune donnée');
-    const exportData = data.map(c => ({
+    const exportData = data.map((c, idx) => ({
+      '#': idx + 1,
       'Nom': c.User?.full_name || '',
       'Prénoms': c.UserProfile?.first_name || '',
       'Téléphone': c.User?.phone || '',
       'Montant (FCFA)': c.amount,
       'Jour': c.day_of_month,
+      'Missionnaire Bénéficiaire': c.service_name === 'Missionnaire' ? c.reason : '',
       'Motifs': c.reason || '',
       'Périodicité': c.periodicity
     }));
@@ -87,26 +89,29 @@ export default function HistoriqueEngagements() {
   const otherCategories = categories.filter(cat => cat.name !== 'Missionnaires' && cat.name !== 'Fonctionnement de l\'AMI');
   const allCategories = [...specialCategories, ...otherCategories];
 
-  // Filtrage strict : par item_id ou égalité exacte des noms (pas de partialMatch)
+  // Filtrage strict : par item_id ou égalité exacte des noms
   const getItemCommitments = (item, categoryName) => {
-    // 1. Par item_id (si réel)
     if (item.id && !String(item.id).startsWith('virt')) {
       const byId = serviceCommitments.filter(c => c.item_id === item.id);
       if (byId.length > 0) return byId;
     }
     const normalizedCat = normalize(categoryName);
     const normalizedItem = normalize(item.name);
-    // 2. Égalité exacte normalisée (service_name + item_name)
     return serviceCommitments.filter(c =>
       normalize(c.service_name) === normalizedCat && normalize(c.item_name) === normalizedItem
     );
+  };
+
+  // Rafraîchissement forcé
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
   };
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Historique des engagements</h1>
-        <button onClick={fetchData} className="bg-blue-500 text-white px-3 py-2 rounded-lg flex items-center gap-2">
+        <button onClick={handleRefresh} className="bg-blue-500 text-white px-3 py-2 rounded-lg flex items-center gap-2">
           <RefreshCw size={18} /> Rafraîchir
         </button>
       </div>
@@ -146,24 +151,37 @@ export default function HistoriqueEngagements() {
                             <table className="min-w-full text-sm border">
                               <thead className="bg-gray-50">
                                 <tr>
-                                  <th>Nom</th><th>Prénoms</th><th>Téléphone</th><th>Montant (FCFA)</th><th>Jour</th><th>Motifs</th><th>Périodicité</th>
+                                  <th className="p-2">#</th>
+                                  <th className="p-2">Nom</th>
+                                  <th className="p-2">Prénoms</th>
+                                  <th className="p-2">Téléphone</th>
+                                  <th className="p-2">Montant (FCFA)</th>
+                                  <th className="p-2">Jour</th>
+                                  {cat.name === 'Missionnaires' && <th className="p-2">Missionnaire Bénéficiaire</th>}
+                                  <th className="p-2">Motifs</th>
+                                  <th className="p-2">Périodicité</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {directCommitments.map(eng => (
+                                {directCommitments.map((eng, idx) => (
                                   <tr key={eng.id}>
+                                    <td className="p-2">{idx + 1}</td>
                                     <td className="p-2">{eng.User?.full_name || ''}</td>
                                     <td className="p-2">{eng.UserProfile?.first_name || ''}</td>
                                     <td className="p-2">{eng.User?.phone || ''}</td>
                                     <td className="p-2">{eng.amount} FCFA</td>
                                     <td className="p-2">{eng.day_of_month}</td>
+                                    {cat.name === 'Missionnaires' && <td className="p-2">{eng.reason || ''}</td>}
                                     <td className="p-2">{eng.reason || '-'}</td>
                                     <td className="p-2">{eng.periodicity}</td>
                                   </tr>
                                 ))}
                               </tbody>
                               <tfoot className="bg-gray-100 font-bold">
-                                <tr><td colSpan="3">Total</td><td colSpan="4">{totalAmount(directCommitments)} FCFA</td></tr>
+                                <tr>
+                                  <td colSpan={cat.name === 'Missionnaires' ? 4 : 3} className="p-2">Total</td>
+                                  <td colSpan={cat.name === 'Missionnaires' ? 5 : 4} className="p-2">{totalAmount(directCommitments)} FCFA</td>
+                                </tr>
                               </tfoot>
                             </table>
                           </div>
@@ -193,7 +211,7 @@ export default function HistoriqueEngagements() {
                                 ) : (
                                   <>
                                     <div className="flex justify-end mb-2">
-                                      <button onClick={() => exportToExcel(itemCommitments, `${cat.name}_${item.name}`)} className="bg-green-600 text-white px-2 py-1 rounded text-sm flex items-center gap-1">
+                                      <button onClick={() => exportToExcel(itemCommitments, `${cat.name}_${item.name}`)} className="bg-green-600 text-white px-2 py-1 rounded text-sm flex-items-center gap-1">
                                         <Download size={14} /> Excel
                                       </button>
                                     </div>
@@ -201,12 +219,20 @@ export default function HistoriqueEngagements() {
                                       <table className="min-w-full text-xs border">
                                         <thead className="bg-gray-100">
                                           <tr>
-                                            <th>Nom</th><th>Prénoms</th><th>Téléphone</th><th>Montant</th><th>Jour</th><th>Motifs</th><th>Périodicité</th>
+                                            <th className="p-1">#</th>
+                                            <th className="p-1">Nom</th>
+                                            <th className="p-1">Prénoms</th>
+                                            <th className="p-1">Téléphone</th>
+                                            <th className="p-1">Montant</th>
+                                            <th className="p-1">Jour</th>
+                                            <th className="p-1">Motifs</th>
+                                            <th className="p-1">Périodicité</th>
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {itemCommitments.map(eng => (
+                                          {itemCommitments.map((eng, idx) => (
                                             <tr key={eng.id}>
+                                              <td className="p-1">{idx + 1}</td>
                                               <td className="p-1">{eng.User?.full_name || ''}</td>
                                               <td className="p-1">{eng.UserProfile?.first_name || ''}</td>
                                               <td className="p-1">{eng.User?.phone || ''}</td>
@@ -218,7 +244,10 @@ export default function HistoriqueEngagements() {
                                           ))}
                                         </tbody>
                                         <tfoot className="bg-gray-200 font-bold">
-                                          <tr><td colSpan="3">Total</td><td colSpan="4">{total} FCFA</td></tr>
+                                          <tr>
+                                            <td colSpan="3" className="p-1">Total</td>
+                                            <td colSpan="5" className="p-1">{total} FCFA</td>
+                                          </tr>
                                         </tfoot>
                                       </table>
                                     </div>
