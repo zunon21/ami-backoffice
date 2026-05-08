@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { Trash2, Edit, Plus, X, Check } from 'lucide-react';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 
 export default function DiversEngagements() {
   const [categories, setCategories] = useState([]);
@@ -10,7 +9,6 @@ export default function DiversEngagements() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [newItemName, setNewItemName] = useState('');
-  const [isReordering, setIsReordering] = useState(false);
 
   // Charger les catégories et items réels depuis l'API
   const fetchCategories = async () => {
@@ -80,37 +78,6 @@ export default function DiversEngagements() {
     }
   };
 
-  // Gestion du drag & drop pour réordonner les items
-  const handleDragEnd = async (result) => {
-    if (!result.destination || !selectedCategory) return;
-    const { source, destination } = result;
-    if (source.index === destination.index) return;
-
-    // Copie locale des items
-    const reorderedItems = Array.from(items);
-    const [movedItem] = reorderedItems.splice(source.index, 1);
-    reorderedItems.splice(destination.index, 0, movedItem);
-    setItems(reorderedItems); // Mise à jour visuelle immédiate
-
-    // Sauvegarder l'ordre dans le backend
-    setIsReordering(true);
-    try {
-      // Envoyer la liste des IDs dans le nouvel ordre
-      const ids = reorderedItems.map(item => item.id);
-      await api.post('/service-items/reorder', {
-        category_id: selectedCategory.id,
-        item_ids: ids
-      });
-    } catch (err) {
-      console.error('Erreur lors de la réorganisation :', err);
-      alert('La réorganisation a échoué. Annulation.');
-      // Recharger la liste depuis le backend pour annuler le changement local
-      await fetchCategories();
-    } finally {
-      setIsReordering(false);
-    }
-  };
-
   if (loading) return <div className="text-center py-10">Chargement...</div>;
   if (categories.length === 0) return <div className="text-center py-10 text-red-500">Aucune catégorie trouvée.</div>;
 
@@ -153,45 +120,22 @@ export default function DiversEngagements() {
           {items.length === 0 ? (
             <p className="text-gray-500 text-center py-8">Aucun élément. Cliquez sur "Ajouter".</p>
           ) : (
-            <DragDropContext onDragEnd={handleDragEnd}>
-              <Droppable droppableId="items-list">
-                {(provided) => (
-                  <div
-                    {...provided.droppableProps}
-                    ref={provided.innerRef}
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
-                  >
-                    {items.map((item, index) => (
-                      <Draggable key={item.id} draggableId={item.id.toString()} index={index}>
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            className={`flex items-center justify-between border rounded-lg p-3 bg-gray-50 ${
-                              snapshot.isDragging ? 'shadow-lg opacity-70' : ''
-                            }`}
-                          >
-                            <span className="text-gray-800">{item.name}</span>
-                            <div className="flex gap-2">
-                              <button onClick={() => handleEditItem(item)} className="text-blue-600 hover:text-blue-800">
-                                <Edit size={18} />
-                              </button>
-                              <button onClick={() => handleDeleteItem(item)} className="text-red-600 hover:text-red-800">
-                                <Trash2 size={18} />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {items.map(item => (
+                <div key={item.id} className="flex items-center justify-between border rounded-lg p-3 bg-gray-50">
+                  <span className="text-gray-800">{item.name}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleEditItem(item)} className="text-blue-600 hover:text-blue-800">
+                      <Edit size={18} />
+                    </button>
+                    <button onClick={() => handleDeleteItem(item)} className="text-red-600 hover:text-red-800">
+                      <Trash2 size={18} />
+                    </button>
                   </div>
-                )}
-              </Droppable>
-            </DragDropContext>
+                </div>
+              ))}
+            </div>
           )}
-          {isReordering && <div className="text-sm text-gray-500 mt-2 text-center">Mise à jour de l'ordre...</div>}
         </div>
       )}
 
