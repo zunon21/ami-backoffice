@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Utiliser le backend local (port 5000) pour le développement
-const API_BASE_URL = 'http://localhost:5000/api';
+// Utiliser le backend distant en production, local pour le développement
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ami-backend-gvuw.onrender.com';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
