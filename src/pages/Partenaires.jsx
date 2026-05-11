@@ -10,11 +10,13 @@ export default function Partenaires() {
     const fetchUsers = async () => {
       try {
         const res = await api.get('/auth/users');
+        // Enrichir et trier par date de création décroissante (plus récent en premier)
         const enriched = res.data.map(u => ({
           ...u,
           UserProfile: u.UserProfile || {}
         }));
-        setUsers(enriched);
+        const sorted = enriched.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        setUsers(sorted);
       } catch (err) {
         console.error('Erreur chargement utilisateurs', err);
       } finally {
@@ -71,11 +73,12 @@ export default function Partenaires() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Profession</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Église/Org.</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Téléphone</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {users.length === 0 ? (
-                <tr><td colSpan="9" className="text-center py-6 text-gray-500">Aucun partenaire inscrit</td></tr>
+                <tr><td colSpan="10" className="text-center py-6 text-gray-500">Aucun partenaire inscrit</td></tr>
               ) : (
                 users.map((user, idx) => (
                   <tr key={user.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -88,6 +91,7 @@ export default function Partenaires() {
                     <td className="px-4 py-3 text-sm text-gray-900">{user.UserProfile?.profession || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{user.UserProfile?.church_org || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{user.phone}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{new Date(user.createdAt).toLocaleDateString()}</td>
                   </tr>
                 ))
               )}

@@ -65,9 +65,10 @@ export default function HistoriqueEngagements() {
       'Téléphone': c.User?.phone || '',
       'Montant (FCFA)': c.amount,
       'Jour': c.day_of_month,
-      'Missionnaire Bénéficiaire': c.service_name === 'Missionnaire' ? c.reason : '',
+      'Missionnaire Bénéficiaire': c.service_name === 'Missionnaire' ? (c.item_name || '') : '',
       'Motifs': c.reason || '',
-      'Périodicité': c.periodicity
+      'Périodicité': c.periodicity,
+      'Date': new Date(c.createdAt).toLocaleDateString()
     }));
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -78,34 +79,37 @@ export default function HistoriqueEngagements() {
   if (loading && categories.length === 0) return <div className="text-center py-10">Chargement...</div>;
   if (error) return <div className="text-red-500 p-4">Erreur : {error}</div>;
 
-  // Catégories spéciales (Fonctionnement et Missionnaires)
   const missionnaireCommitments = serviceCommitments.filter(c =>
     c.service_name && normalize(c.service_name).includes('missionnaire')
   );
+  const sortedMonthly = [...monthlyCommitments].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const sortedMissionnaire = [...missionnaireCommitments].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
   const specialCategories = [
-    { id: 'fonctionnement', name: 'Fonctionnement de l\'AMI', items: [], direct: true, commitments: monthlyCommitments },
-    { id: 'missionnaires', name: 'Missionnaires', items: [], direct: true, commitments: missionnaireCommitments }
+    { id: 'fonctionnement', name: 'Fonctionnement de l\'AMI', items: [], direct: true, commitments: sortedMonthly },
+    { id: 'missionnaires', name: 'Missionnaires', items: [], direct: true, commitments: sortedMissionnaire }
   ];
   const otherCategories = categories.filter(cat => cat.name !== 'Missionnaires' && cat.name !== 'Fonctionnement de l\'AMI');
   const allCategories = [...specialCategories, ...otherCategories];
 
-  // Filtrage strict : par item_id ou égalité exacte des noms
   const getItemCommitments = (item, categoryName) => {
+    let matches = [];
     if (item.id && !String(item.id).startsWith('virt')) {
       const byId = serviceCommitments.filter(c => c.item_id === item.id);
-      if (byId.length > 0) return byId;
+      if (byId.length > 0) matches = byId;
     }
-    const normalizedCat = normalize(categoryName);
-    const normalizedItem = normalize(item.name);
-    return serviceCommitments.filter(c =>
-      normalize(c.service_name) === normalizedCat && normalize(c.item_name) === normalizedItem
-    );
+    if (matches.length === 0) {
+      const normalizedCat = normalize(categoryName);
+      const normalizedItem = normalize(item.name);
+      matches = serviceCommitments.filter(c =>
+        normalize(c.service_name) === normalizedCat && normalize(c.item_name) === normalizedItem
+      );
+    }
+    return matches.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
   };
 
-  // Rafraîchissement forcé
-  const handleRefresh = () => {
-    setRefreshKey(prev => prev + 1);
-  };
+  const handleRefresh = () => setRefreshKey(prev => prev + 1);
+  const formatDate = (isoString) => isoString ? new Date(isoString).toLocaleDateString() : '';
 
   return (
     <div>
@@ -160,6 +164,7 @@ export default function HistoriqueEngagements() {
                                   {cat.name === 'Missionnaires' && <th className="p-2">Missionnaire Bénéficiaire</th>}
                                   <th className="p-2">Motifs</th>
                                   <th className="p-2">Périodicité</th>
+                                  <th className="p-2">Date</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -171,16 +176,17 @@ export default function HistoriqueEngagements() {
                                     <td className="p-2">{eng.User?.phone || ''}</td>
                                     <td className="p-2">{eng.amount} FCFA</td>
                                     <td className="p-2">{eng.day_of_month}</td>
-                                    {cat.name === 'Missionnaires' && <td className="p-2">{eng.reason || ''}</td>}
+                                    {cat.name === 'Missionnaires' && <td className="p-2">{eng.item_name || ''}</td>}
                                     <td className="p-2">{eng.reason || '-'}</td>
                                     <td className="p-2">{eng.periodicity}</td>
+                                    <td className="p-2">{formatDate(eng.createdAt)}</td>
                                   </tr>
                                 ))}
                               </tbody>
                               <tfoot className="bg-gray-100 font-bold">
                                 <tr>
                                   <td colSpan={cat.name === 'Missionnaires' ? 4 : 3} className="p-2">Total</td>
-                                  <td colSpan={cat.name === 'Missionnaires' ? 5 : 4} className="p-2">{totalAmount(directCommitments)} FCFA</td>
+                                  <td colSpan={cat.name === 'Missionnaires' ? 6 : 5} className="p-2">{totalAmount(directCommitments)} FCFA</td>
                                 </tr>
                               </tfoot>
                             </table>
@@ -211,7 +217,7 @@ export default function HistoriqueEngagements() {
                                 ) : (
                                   <>
                                     <div className="flex justify-end mb-2">
-                                      <button onClick={() => exportToExcel(itemCommitments, `${cat.name}_${item.name}`)} className="bg-green-600 text-white px-2 py-1 rounded text-sm flex-items-center gap-1">
+                                      <button onClick={() => exportToExcel(itemCommitments, `${cat.name}_${item.name}`)} className="bg-green-600 text-white px-2 py-1 rounded text-sm flex items-center gap-1">
                                         <Download size={14} /> Excel
                                       </button>
                                     </div>
@@ -227,6 +233,7 @@ export default function HistoriqueEngagements() {
                                             <th className="p-1">Jour</th>
                                             <th className="p-1">Motifs</th>
                                             <th className="p-1">Périodicité</th>
+                                            <th className="p-1">Date</th>
                                           </tr>
                                         </thead>
                                         <tbody>
@@ -240,13 +247,14 @@ export default function HistoriqueEngagements() {
                                               <td className="p-1">{eng.day_of_month}</td>
                                               <td className="p-1">{eng.reason || '-'}</td>
                                               <td className="p-1">{eng.periodicity}</td>
+                                              <td className="p-1">{formatDate(eng.createdAt)}</td>
                                             </tr>
                                           ))}
                                         </tbody>
                                         <tfoot className="bg-gray-200 font-bold">
                                           <tr>
                                             <td colSpan="3" className="p-1">Total</td>
-                                            <td colSpan="5" className="p-1">{total} FCFA</td>
+                                            <td colSpan="6" className="p-1">{total} FCFA</td>
                                           </tr>
                                         </tfoot>
                                       </table>
