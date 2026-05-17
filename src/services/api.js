@@ -3,8 +3,8 @@ import axios from 'axios';
 // Déterminer la base URL selon l'environnement
 const isDevelopment = import.meta.env.DEV;
 const API_BASE_URL = isDevelopment
-  ? 'http://localhost:5000/api'                                   // backend local
-  : (import.meta.env.VITE_API_URL || 'https://ami-backend-gvuw.onrender.com/api'); // backend distant
+  ? 'http://localhost:5000/api'
+  : (import.meta.env.VITE_API_URL || 'https://ami-backend-gvuw.onrender.com/api');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -26,8 +26,12 @@ const getAdminToken = async () => {
   }
 };
 
-// Intercepteur pour ajouter le token admin à chaque requête (si disponible)
+// Intercepteur pour ajouter le token admin à chaque requête (sauf pour les routes publiques)
 api.interceptors.request.use(async (config) => {
+  // Ne pas ajouter le token pour les routes qui doivent être publiques
+  if (config.url.includes('/donations')) {
+    return config;
+  }
   let token = localStorage.getItem('adminToken');
   if (!token) {
     token = await getAdminToken();
