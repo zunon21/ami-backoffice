@@ -5,12 +5,12 @@ import * as XLSX from 'xlsx';
 export default function Partenaires() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const res = await api.get('/auth/users');
-        // Enrichir et trier par date de création décroissante (plus récent en premier)
         const enriched = res.data.map(u => ({
           ...u,
           UserProfile: u.UserProfile || {}
@@ -45,6 +45,15 @@ export default function Partenaires() {
     XLSX.writeFile(wb, `partenaires_ami_${new Date().toISOString().slice(0,19)}.xlsx`);
   };
 
+  // Filtrer les utilisateurs selon le terme de recherche
+  const filteredUsers = users.filter(user => {
+    if (!searchTerm.trim()) return true;
+    const fullName = (user.full_name || '').toLowerCase();
+    const firstName = (user.UserProfile?.first_name || '').toLowerCase();
+    const term = searchTerm.toLowerCase();
+    return fullName.includes(term) || firstName.includes(term);
+  });
+
   if (loading) return <div className="text-center py-10">Chargement des partenaires...</div>;
 
   return (
@@ -57,6 +66,18 @@ export default function Partenaires() {
         >
           📥 Exporter Excel
         </button>
+      </div>
+
+      {/* Barre de recherche */}
+      <div className="mb-4 relative">
+        <input
+          type="text"
+          placeholder="Chercher par nom"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full md:w-80 px-4 py-2 pl-10 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
       </div>
 
       <div className="bg-white rounded-xl shadow overflow-hidden">
@@ -77,10 +98,10 @@ export default function Partenaires() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {users.length === 0 ? (
-                <tr><td colSpan="10" className="text-center py-6 text-gray-500">Aucun partenaire inscrit</td></tr>
+              {filteredUsers.length === 0 ? (
+                <tr><td colSpan="10" className="text-center py-6 text-gray-500">Aucun partenaire trouvé</td></tr>
               ) : (
-                users.map((user, idx) => (
+                filteredUsers.map((user, idx) => (
                   <tr key={user.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="px-4 py-3 text-sm text-gray-900">{idx + 1}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{user.full_name || '—'}</td>

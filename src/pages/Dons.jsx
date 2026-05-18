@@ -16,8 +16,10 @@ export default function Dons() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedPartner, setExpandedPartner] = useState(null);
+  const [activeTab, setActiveTab] = useState('honored');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Auto-login admin (mot de passe cohérent avec api.js)
+  // Auto-login admin
   useEffect(() => {
     const autoLogin = async () => {
       if (!localStorage.getItem('adminToken')) {
@@ -40,9 +42,7 @@ export default function Dons() {
           api.get('/donations'),
           api.get('/auth/users')
         ]);
-        // Ne garder que les dons réussis
         let successfulDonations = donRes.data.filter(d => d.status === 'success');
-        // Trier par date décroissante (les plus récents en premier)
         successfulDonations.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setDonations(successfulDonations);
         setUsers(userRes.data);
@@ -57,7 +57,7 @@ export default function Dons() {
 
   if (loading) return <div className="text-center py-10">Chargement des données...</div>;
 
-  // --- 1. Regrouper les dons pour la partie "Engagements honorés" ---
+  // --- Regroupement des dons pour "Engagements honorés" ---
   const categories = {
     'Fonctionnement de l\'AMI': [],
     'Missionnaire': [],
@@ -97,28 +97,24 @@ export default function Dons() {
       categories[category].push({ ...d, itemName, extra });
     }
   });
-
-  // Compléter les catégories dynamiques (même vides)
   dynamicCategories.forEach(cat => {
     if (!categories[cat]) categories[cat] = [];
   });
 
-  // Associer les profils utilisateur pour tous les dons
+  // Associer les profils utilisateur
   const userMap = new Map();
   users.forEach(u => {
     userMap.set(u.id, { full_name: u.full_name, phone: u.phone, profile: u.UserProfile || {} });
   });
-
   const enrichDonation = (d) => ({
     ...d,
     user: userMap.get(d.user_id) || { full_name: '', phone: '', profile: {} },
     userProfile: (userMap.get(d.user_id) || {}).profile
   });
 
-  // Fonction pour afficher un tableau avec les colonnes adaptées (tri interne par date)
+  // Fonction pour afficher un tableau avec colonnes adaptées
   const renderDonTable = (title, donationsRaw, columnsConfig) => {
     if (!donationsRaw.length) return null;
-    // Trier les dons par date décroissante avant affichage
     const donations = [...donationsRaw].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     const total = donations.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
 
@@ -230,21 +226,25 @@ export default function Dons() {
     { field: 'date', label: 'Date' }, { field: 'time', label: 'Heure' }
   ];
 
-  // --- 2. Soutiens des partenaires ---
-  // Regrouper les dons par utilisateur
+  // --- Soutiens des partenaires ---
   const userDonationsMap = new Map();
   donations.forEach(d => {
     const userId = d.user_id;
     if (!userDonationsMap.has(userId)) userDonationsMap.set(userId, []);
     userDonationsMap.get(userId).push(enrichDonation(d));
   });
-  // Trier les dons de chaque utilisateur par date décroissante
   for (let [userId, userDons] of userDonationsMap.entries()) {
     userDons.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     userDonationsMap.set(userId, userDons);
   }
 
-  const sortedUsers = [...users].sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+  const filteredUsers = users.filter(user => {
+    if (!searchTerm.trim()) return true;
+    const fullName = (user.full_name || '').toLowerCase();
+    const firstName = (user.UserProfile?.first_name || '').toLowerCase();
+    const term = searchTerm.toLowerCase();
+    return fullName.includes(term) || firstName.includes(term);
+  }).sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
 
   const PartnerRow = ({ user }) => {
     const userDonations = userDonationsMap.get(user.id) || [];
@@ -339,68 +339,91 @@ export default function Dons() {
     );
   };
 
+  // --- Rendu avec onglets ---
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Dons</h1>
 
-      {/* =============== 1. Engagements honorés =============== */}
-      <div className="mb-8">
-        <h2 className="text-xl font-bold text-gray-700 border-b pb-2 mb-4">Engagements honorés</h2>
-
-        {/* Fonctionnement de l'AMI */}
-        {categories['Fonctionnement de l\'AMI']?.length > 0 &&
-          renderDonTable(
-            'Fonctionnement de l\'AMI',
-            categories['Fonctionnement de l\'AMI'].map(enrichDonation),
-            columnsFonctionnement
-          )}
-
-        {/* Missionnaire */}
-        {categories['Missionnaire']?.length > 0 &&
-          renderDonTable(
-            'Missionnaire',
-            categories['Missionnaire'].map(enrichDonation),
-            columnsMissionnaire
-          )}
-
-        {/* Structures et Organisations */}
-        {categories['Structures et Organisations']?.length > 0 &&
-          renderDonTable(
-            'Structures et Organisations',
-            categories['Structures et Organisations'].map(enrichDonation),
-            columnsStructures
-          )}
-
-        {/* Catégories dynamiques */}
-        {Array.from(dynamicCategories)
-          .filter(cat => cat !== 'Autres')
-          .sort()
-          .map(cat => {
-            const catDonations = categories[cat] || [];
-            if (catDonations.length === 0) return null;
-            return renderDonTable(
-              cat,
-              catDonations.map(enrichDonation),
-              columnsGeneric
-            );
-          })}
-
-        {Object.values(categories).every(arr => arr.length === 0) && (
-          <p className="text-gray-500">Aucun don honoré pour le moment.</p>
-        )}
+      <div className="flex border-b border-gray-200 mb-6">
+        <button
+          className={`py-2 px-6 font-medium text-sm focus:outline-none ${
+            activeTab === 'honored'
+              ? 'text-blue-600 border-b-2 border-blue-600 -mb-px'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+          onClick={() => setActiveTab('honored')}
+        >
+          Engagements honorés
+        </button>
+        <button
+          className={`py-2 px-6 font-medium text-sm focus:outline-none ${
+            activeTab === 'partners'
+              ? 'text-blue-600 border-b-2 border-blue-600 -mb-px'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+          onClick={() => setActiveTab('partners')}
+        >
+          Soutiens des partenaires
+        </button>
       </div>
 
-      {/* =============== 2. Soutiens des partenaires =============== */}
-      <div>
-        <h2 className="text-xl font-bold text-gray-700 border-b pb-2 mb-4">Soutiens des partenaires</h2>
-        {sortedUsers.length === 0 ? (
-          <p className="text-gray-500">Aucun partenaire inscrit.</p>
-        ) : (
-          <div className="space-y-2">
-            {sortedUsers.map(user => <PartnerRow key={user.id} user={user} />)}
+      {activeTab === 'honored' ? (
+        <div>
+          {categories['Fonctionnement de l\'AMI']?.length > 0 &&
+            renderDonTable(
+              'Fonctionnement de l\'AMI',
+              categories['Fonctionnement de l\'AMI'].map(enrichDonation),
+              columnsFonctionnement
+            )}
+          {categories['Missionnaire']?.length > 0 &&
+            renderDonTable(
+              'Missionnaire',
+              categories['Missionnaire'].map(enrichDonation),
+              columnsMissionnaire
+            )}
+          {categories['Structures et Organisations']?.length > 0 &&
+            renderDonTable(
+              'Structures et Organisations',
+              categories['Structures et Organisations'].map(enrichDonation),
+              columnsStructures
+            )}
+          {Array.from(dynamicCategories)
+            .filter(cat => cat !== 'Autres')
+            .sort()
+            .map(cat => {
+              const catDonations = categories[cat] || [];
+              if (catDonations.length === 0) return null;
+              return renderDonTable(
+                cat,
+                catDonations.map(enrichDonation),
+                columnsGeneric
+              );
+            })}
+          {Object.values(categories).every(arr => arr.length === 0) && (
+            <p className="text-gray-500">Aucun don honoré pour le moment.</p>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div className="mb-4 relative">
+            <input
+              type="text"
+              placeholder="Chercher par nom"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full md:w-80 px-4 py-2 pl-10 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
           </div>
-        )}
-      </div>
+          {filteredUsers.length === 0 ? (
+            <p className="text-gray-500">Aucun partenaire trouvé.</p>
+          ) : (
+            <div className="space-y-2">
+              {filteredUsers.map(user => <PartnerRow key={user.id} user={user} />)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
