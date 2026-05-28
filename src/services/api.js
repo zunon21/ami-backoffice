@@ -1,17 +1,17 @@
 import axios from 'axios';
 
 // Déterminer la base URL selon l'environnement
-const isDevelopment = import.meta.env.DEV;
-const API_BASE_URL = isDevelopment
+// En développement : backend local, en production : backend Render
+const API_BASE_URL = import.meta.env.DEV
   ? 'http://localhost:5000/api'
-  : (import.meta.env.VITE_API_URL || 'https://ami-backend-gvuw.onrender.com/api');
+  : 'https://ami-backend-gvuw.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Fonction pour obtenir un token admin (utilisé seulement si le backend l'exige)
+// Fonction pour obtenir un token admin
 const getAdminToken = async () => {
   try {
     const response = await axios.post(`${API_BASE_URL}/auth/admin/login`, { password: 'AMI1990' });
@@ -26,9 +26,9 @@ const getAdminToken = async () => {
   }
 };
 
-// Intercepteur pour ajouter le token admin à chaque requête (sauf pour les routes publiques)
+// Intercepteur pour ajouter le token admin (sauf pour les routes publiques)
 api.interceptors.request.use(async (config) => {
-  // Ne pas ajouter le token pour les routes qui doivent être publiques
+  // Ne pas ajouter le token pour les routes publiques (ex: donations)
   if (config.url.includes('/donations')) {
     return config;
   }
