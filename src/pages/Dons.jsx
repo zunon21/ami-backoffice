@@ -12,6 +12,33 @@ const formatDateTime = (isoString) => {
   };
 };
 
+// Calcule les semaines d'une année (lundi -> dimanche)
+const getWeeksOfYear = (year) => {
+  const weeks = [];
+  const firstDayOfYear = new Date(year, 0, 1);
+  // Trouver le premier lundi de l'année
+  let firstMonday = new Date(firstDayOfYear);
+  while (firstMonday.getDay() !== 1) {
+    firstMonday.setDate(firstMonday.getDate() + 1);
+  }
+  let currentMonday = new Date(firstMonday);
+  let weekNumber = 1;
+  while (currentMonday.getFullYear() <= year) {
+    const sunday = new Date(currentMonday);
+    sunday.setDate(currentMonday.getDate() + 6);
+    weeks.push({
+      weekNumber,
+      start: new Date(currentMonday),
+      end: sunday,
+      label: `Semaine ${weekNumber} : Du ${currentMonday.getDate()}/${currentMonday.getMonth()+1} au ${sunday.getDate()}/${sunday.getMonth()+1} ${sunday.getFullYear()}`
+    });
+    currentMonday.setDate(currentMonday.getDate() + 7);
+    weekNumber++;
+    if (currentMonday.getFullYear() > year) break;
+  }
+  return weeks;
+};
+
 export default function Dons() {
   const [donations, setDonations] = useState([]);
   const [users, setUsers] = useState([]);
@@ -23,6 +50,11 @@ export default function Dons() {
   const [expandedCat, setExpandedCat] = useState(null);
   const [expandedItem, setExpandedItem] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // États pour l'onglet "Dons de la semaine"
+  const [selectedYear, setSelectedYear] = useState(2026);
+  const [selectedWeek, setSelectedWeek] = useState(null);
+  const [weeksList, setWeeksList] = useState([]);
 
   // Auto-login admin
   useEffect(() => {
@@ -64,6 +96,12 @@ export default function Dons() {
     fetchData();
   }, [refreshKey]);
 
+  // Mettre à jour la liste des semaines quand l'année change
+  useEffect(() => {
+    setWeeksList(getWeeksOfYear(selectedYear));
+    setSelectedWeek(null);
+  }, [selectedYear]);
+
   if (loading) return <div className="text-center py-10">Chargement des données...</div>;
 
   // Map utilisateurs
@@ -77,7 +115,6 @@ export default function Dons() {
   // 1. Engagements honorés – structure par catégories
   // ------------------------------------------------
 
-  // Récupère les dons pour une catégorie spéciale (Fonctionnement, Missionnaire, Structures)
   const getSpecialDonations = (catName) => {
     if (catName === 'Fonctionnement de l\'AMI') {
       return donations.filter(d => d.description === 'Fonctionnement de l\'AMI');
@@ -91,16 +128,13 @@ export default function Dons() {
     return [];
   };
 
-  // Pour une catégorie normale (Champs, Projets, etc.), récupère les dons associés à un item
   const getItemDonations = (categoryName, itemName) => {
     const prefix = `${categoryName} - ${itemName}`;
     return donations.filter(d => d.description === prefix);
   };
 
-  // Total des montants
   const totalAmount = (list) => list.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
 
-  // Export Excel d'une liste de dons
   const exportDonationsToExcel = (donationsList, title, columns) => {
     if (!donationsList.length) return alert('Aucun don à exporter');
     const exportData = donationsList.map((d, idx) => {
@@ -132,7 +166,6 @@ export default function Dons() {
     XLSX.writeFile(wb, `${title}_${new Date().toISOString().slice(0, 19)}.xlsx`);
   };
 
-  // Composant Tableau réutilisable
   const DonTable = ({ title, donations: rawDonations, columns, extraData }) => {
     if (!rawDonations.length) return null;
     const donationsSorted = [...rawDonations].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -194,7 +227,6 @@ export default function Dons() {
     );
   };
 
-  // Définition des colonnes par type de tableau
   const columnsFonctionnement = [
     { field: '#', label: '#' }, { field: 'full_name', label: 'Nom' }, { field: 'first_name', label: 'Prénoms' },
     { field: 'phone', label: 'Téléphone' }, { field: 'amount', label: 'Montant (FCFA)' },
@@ -218,19 +250,16 @@ export default function Dons() {
     { field: 'date', label: 'Date' }, { field: 'time', label: 'Heure' }
   ];
 
-  // Liste des catégories spéciales
   const specialCategories = [
     { id: 'fonctionnement', name: 'Fonctionnement de l\'AMI' },
     { id: 'missionnaire', name: 'Missionnaire' },
     { id: 'structures', name: 'Structures et Organisations' }
   ];
 
-  // Catégories dynamiques (Champs, Projets, etc.) – on ignore celles déjà traitées
   const dynamicCategoriesList = categories.filter(cat =>
     !['Missionnaire', 'Fonctionnement de l\'AMI'].includes(cat.name)
   );
 
-  // Fonction pour obtenir les colonnes appropriées pour une catégorie
   const getColumnsForCategory = (catName) => {
     if (catName === 'Fonctionnement de l\'AMI') return columnsFonctionnement;
     if (catName === 'Missionnaire') return columnsMissionnaire;
@@ -239,7 +268,7 @@ export default function Dons() {
   };
 
   // ---------------------------------------------------------
-  // 2. Soutiens des partenaires (inchangé, mais adapté pour utiliser les nouvelles données)
+  // 2. Soutiens des partenaires
   // ---------------------------------------------------------
   const userDonationsMap = new Map();
   donations.forEach(d => {
@@ -355,9 +384,96 @@ export default function Dons() {
     );
   };
 
-  // Rafraîchissement manuel
   const handleRefresh = () => setRefreshKey(prev => prev + 1);
 
+  // ---------------------------------------------------------
+  // 3. Dons de la semaine
+  // ---------------------------------------------------------
+  const weeklyColumns = [
+    { field: '#', label: '#' },
+    { field: 'full_name', label: 'Nom' },
+    { field: 'first_name', label: 'Prénoms' },
+    { field: 'phone', label: 'Téléphone' },
+    { field: 'amount', label: 'Montant (FCFA)' },
+    { field: 'organizationName', label: 'Nom de l\'organisation' },
+    { field: 'destination', label: 'Destinations des fonds' },
+    { field: 'payment_method', label: 'Réseaux' },
+    { field: 'missionnaire', label: 'Missionnaire Bénéficiaire' },
+    { field: 'reason', label: 'Motifs' },
+    { field: 'date', label: 'Date' },
+    { field: 'time', label: 'Heure' }
+  ];
+
+  const getDonationsForWeek = (weekStart, weekEnd) => {
+    return donations.filter(d => {
+      const dDate = new Date(d.createdAt);
+      return dDate >= weekStart && dDate <= weekEnd;
+    });
+  };
+
+  const handleWeekClick = (week) => {
+    setSelectedWeek(week);
+  };
+
+  const renderWeeklyDonations = () => {
+    if (!selectedWeek) return <p className="text-gray-500">Sélectionnez une semaine pour voir les dons.</p>;
+    const weekDonations = getDonationsForWeek(selectedWeek.start, selectedWeek.end);
+    if (weekDonations.length === 0) return <p className="text-gray-500">Aucun don pour cette semaine.</p>;
+    const sorted = [...weekDonations].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const totalWeek = totalAmount(sorted);
+    const handleExportWeek = () => exportDonationsToExcel(sorted, `Dons semaine ${selectedWeek.weekNumber} ${selectedYear}`, weeklyColumns);
+    return (
+      <div>
+        <div className="flex justify-end mb-4">
+          <button onClick={handleExportWeek} className="bg-green-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">
+            <Download size={16} /> Exporter Excel
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full border text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                {weeklyColumns.map(col => <th key={col.field} className="p-2 border text-left">{col.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((d, idx) => {
+                const user = getUserInfo(d.user_id);
+                const { date, time } = formatDateTime(d.createdAt);
+                const missionnaire = d.description?.startsWith('Missionnaire - ') ? d.description.replace('Missionnaire - ', '') : '';
+                return (
+                  <tr key={d.id} className="border-b">
+                    <td className="p-2 text-center">{idx + 1}</td>
+                    <td className="p-2">{user.full_name}</td>
+                    <td className="p-2">{user.profile.first_name || ''}</td>
+                    <td className="p-2">{user.phone}</td>
+                    <td className="p-2 text-right">{d.amount} FCFA</td>
+                    <td className="p-2">{d.extra_data?.organizationName || ''}</td>
+                    <td className="p-2">{d.extra_data?.destination || ''}</td>
+                    <td className="p-2">{(d.payment_method || '').toUpperCase()}</td>
+                    <td className="p-2">{missionnaire}</td>
+                    <td className="p-2">{d.extra_data?.reason || ''}</td>
+                    <td className="p-2">{date}</td>
+                    <td className="p-2">{time}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot className="bg-gray-50 font-bold">
+              <tr>
+                <td colSpan={weeklyColumns.length - 1} className="p-2 text-right">Total de la semaine :</td>
+                <td className="p-2 text-right">{totalWeek} FCFA</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const years = Array.from({ length: 2126 - 2026 + 1 }, (_, i) => 2026 + i);
+
+  // ------------------------ Rendu principal ------------------------
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -389,12 +505,21 @@ export default function Dons() {
         >
           Soutiens des partenaires
         </button>
+        <button
+          className={`py-2 px-6 font-medium text-sm focus:outline-none ${
+            activeTab === 'weekly'
+              ? 'text-blue-600 border-b-2 border-blue-600 -mb-px'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+          onClick={() => setActiveTab('weekly')}
+        >
+          Dons de la semaine
+        </button>
       </div>
 
-      {/* Contenu onglet Engagements honorés */}
-      {activeTab === 'honored' ? (
+      {/* Contenu Engagements honorés */}
+      {activeTab === 'honored' && (
         <div className="space-y-3">
-          {/* Catégories spéciales */}
           {specialCategories.map(cat => {
             const donationsList = getSpecialDonations(cat.name);
             const columns = getColumnsForCategory(cat.name);
@@ -423,8 +548,6 @@ export default function Dons() {
               </div>
             );
           })}
-
-          {/* Catégories dynamiques (Champs, Projets, IIFM, Départements, Activités, Social, Equipements, Zones) */}
           {dynamicCategoriesList.map(cat => {
             const hasItems = cat.items && cat.items.length > 0;
             if (!hasItems) return null;
@@ -480,13 +603,12 @@ export default function Dons() {
               </div>
             );
           })}
-
-          {donations.length === 0 && (
-            <p className="text-gray-500 text-center py-6">Aucun don honoré pour le moment.</p>
-          )}
+          {donations.length === 0 && <p className="text-gray-500 text-center py-6">Aucun don honoré pour le moment.</p>}
         </div>
-      ) : (
-        // Onglet Soutiens des partenaires
+      )}
+
+      {/* Contenu Soutiens des partenaires */}
+      {activeTab === 'partners' && (
         <div>
           <div className="mb-4 relative">
             <input
@@ -505,6 +627,47 @@ export default function Dons() {
               {filteredUsers.map(user => <PartnerRow key={user.id} user={user} />)}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Contenu Dons de la semaine */}
+      {activeTab === 'weekly' && (
+        <div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Année</label>
+            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border rounded">
+              {years.map(year => (
+                <button
+                  key={year}
+                  onClick={() => setSelectedYear(year)}
+                  className={`px-3 py-1 rounded-full text-sm ${selectedYear === year ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                >
+                  {year}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-2">Semaines de {selectedYear}</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {weeksList.map(week => (
+                <button
+                  key={week.weekNumber}
+                  onClick={() => handleWeekClick(week)}
+                  className={`p-2 border rounded text-left text-sm ${selectedWeek?.weekNumber === week.weekNumber ? 'bg-blue-100 border-blue-500' : 'hover:bg-gray-100'}`}
+                >
+                  <div className="font-semibold">Semaine {week.weekNumber}</div>
+                  <div className="text-xs text-gray-500">{week.label.split(' : ')[1]}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-2">
+              {selectedWeek ? `Dons de la ${selectedWeek.label}` : 'Aucune semaine sélectionnée'}
+            </h3>
+            {renderWeeklyDonations()}
+          </div>
         </div>
       )}
     </div>
