@@ -12,10 +12,12 @@ const formatDateTime = (isoString) => {
   };
 };
 
-// Calcule les semaines d'une année (lundi -> dimanche)
+// Calcule les semaines d'une année (lundi -> dimanche) – norme ISO
 const getWeeksOfYear = (year) => {
   const weeks = [];
+  // Premier jour de l'année
   const firstDayOfYear = new Date(year, 0, 1);
+  // Trouver le premier lundi de l'année
   let firstMonday = new Date(firstDayOfYear);
   while (firstMonday.getDay() !== 1) {
     firstMonday.setDate(firstMonday.getDate() + 1);
@@ -54,6 +56,7 @@ export default function Dons() {
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [weeksList, setWeeksList] = useState([]);
 
+  // Auto-login admin
   useEffect(() => {
     const autoLogin = async () => {
       if (!localStorage.getItem('adminToken')) {
@@ -68,6 +71,7 @@ export default function Dons() {
     autoLogin();
   }, []);
 
+  // Charger les dons, utilisateurs et catégories
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -97,12 +101,23 @@ export default function Dons() {
     setSelectedWeek(null);
   }, [selectedYear]);
 
+  // Sélection automatique de la semaine en cours quand on ouvre l'onglet "weekly"
   useEffect(() => {
     if (activeTab === 'weekly' && weeksList.length > 0 && !selectedWeek) {
       const today = new Date();
-      const currentWeek = weeksList.find(week => today >= week.start && today <= week.end);
+      today.setHours(0, 0, 0, 0);
+      const currentWeek = weeksList.find(week => {
+        const start = new Date(week.start);
+        const end = new Date(week.end);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return today >= start && today <= end;
+      });
       if (currentWeek) {
         setSelectedWeek(currentWeek);
+      } else {
+        // Fallback : prendre la première semaine si aucune trouvée
+        setSelectedWeek(weeksList[0]);
       }
     }
   }, [activeTab, weeksList, selectedWeek]);
@@ -160,8 +175,8 @@ export default function Dons() {
         else if (col.field === 'engagement') row[col.label] = d.description || 'Don AMI';
         else if (col.field === 'received_amount') {
           const amountNum = parseFloat(d.amount);
-          const received = amountNum * 0.97; // -3%
-          row[col.label] = `${received.toFixed(2)} FCFA`;
+          const received = Math.round(amountNum * 0.97);
+          row[col.label] = `${received} FCFA`;
         }
         else if (col.field === 'date') row[col.label] = date;
         else if (col.field === 'time') row[col.label] = time;
@@ -372,7 +387,7 @@ export default function Dons() {
                             <td className="p-1 border">{(d.payment_method || '').toUpperCase()}</td>
                             <td className="p-1 border">{date}</td>
                             <td className="p-1 border">{time}</td>
-                           </tr>
+                          </tr>
                         );
                       })}
                     </tbody>
@@ -381,7 +396,7 @@ export default function Dons() {
                         <td colSpan="2" className="p-1 border">Total</td>
                         <td className="p-1 border text-right">{total} FCFA</td>
                         <td colSpan="4"></td>
-                       </tr>
+                      </tr>
                     </tfoot>
                   </table>
                 </div>
@@ -402,10 +417,10 @@ export default function Dons() {
     { field: '#', label: '#' },
     { field: 'full_name', label: 'Nom' },
     { field: 'first_name', label: 'Prénoms' },
-    { field: 'engagement', label: 'NOM DE L’ENGAGEMENT' },        // nouvelle colonne
+    { field: 'engagement', label: 'NOM DE L’ENGAGEMENT' },
     { field: 'phone', label: 'Téléphone' },
     { field: 'amount', label: 'Montant (FCFA)' },
-    { field: 'received_amount', label: 'Montant reçu (FCFA)' },    // nouvelle colonne
+    { field: 'received_amount', label: 'Montant reçu (FCFA)' },
     { field: 'organizationName', label: 'Nom de l\'organisation' },
     { field: 'destination', label: 'Destinations des fonds' },
     { field: 'payment_method', label: 'Réseaux' },
@@ -418,7 +433,13 @@ export default function Dons() {
   const getDonationsForWeek = (weekStart, weekEnd) => {
     return donations.filter(d => {
       const dDate = new Date(d.createdAt);
-      return dDate >= weekStart && dDate <= weekEnd;
+      // Ignorer l'heure pour la comparaison
+      dDate.setHours(0, 0, 0, 0);
+      const start = new Date(weekStart);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(weekEnd);
+      end.setHours(23, 59, 59, 999);
+      return dDate >= start && dDate <= end;
     });
   };
 
@@ -432,7 +453,7 @@ export default function Dons() {
     if (weekDonations.length === 0) return <p className="text-gray-500">Aucun don pour cette semaine.</p>;
     const sorted = [...weekDonations].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
     const totalWeek = totalAmount(sorted);
-    const totalReceived = sorted.reduce((sum, d) => sum + (parseFloat(d.amount) * 0.97), 0);
+    const totalReceived = Math.round(sorted.reduce((sum, d) => sum + (parseFloat(d.amount) * 0.97), 0));
     const handleExportWeek = () => exportDonationsToExcel(sorted, `Dons semaine ${selectedWeek.weekNumber} ${selectedYear}`, weeklyColumns);
     return (
       <div>
@@ -454,7 +475,7 @@ export default function Dons() {
                 const { date, time } = formatDateTime(d.createdAt);
                 const missionnaire = d.description?.startsWith('Missionnaire - ') ? d.description.replace('Missionnaire - ', '') : '';
                 const amountNum = parseFloat(d.amount);
-                const received = amountNum * 0.97;
+                const received = Math.round(amountNum * 0.97);
                 return (
                   <tr key={d.id} className="border-b">
                     <td className="p-2 text-center">{idx + 1}</td>
@@ -463,7 +484,7 @@ export default function Dons() {
                     <td className="p-2">{d.description || 'Don AMI'}</td>
                     <td className="p-2">{user.phone}</td>
                     <td className="p-2 text-right">{d.amount} FCFA</td>
-                    <td className="p-2 text-right text-gray-500">{received.toFixed(2)} FCFA</td> {/* couleur plus claire */}
+                    <td className="p-2 text-right text-cyan-400 font-medium">{received} FCFA</td> {/* vert ciel */}
                     <td className="p-2">{d.extra_data?.organizationName || ''}</td>
                     <td className="p-2">{d.extra_data?.destination || ''}</td>
                     <td className="p-2">{(d.payment_method || '').toUpperCase()}</td>
@@ -471,7 +492,7 @@ export default function Dons() {
                     <td className="p-2">{d.extra_data?.reason || ''}</td>
                     <td className="p-2">{date}</td>
                     <td className="p-2">{time}</td>
-                   </tr>
+                  </tr>
                 );
               })}
             </tbody>
@@ -479,9 +500,9 @@ export default function Dons() {
               <tr>
                 <td colSpan={5} className="p-2 text-right">Total général :</td>
                 <td className="p-2 text-right">{totalWeek} FCFA</td>
-                <td className="p-2 text-right">{totalReceived.toFixed(2)} FCFA</td>
+                <td className="p-2 text-right">{totalReceived} FCFA</td>
                 <td colSpan={7}></td>
-               </tr>
+              </tr>
             </tfoot>
           </table>
         </div>
