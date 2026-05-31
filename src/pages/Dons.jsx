@@ -102,6 +102,17 @@ export default function Dons() {
     setSelectedWeek(null);
   }, [selectedYear]);
 
+  // Sélection automatique de la semaine en cours quand on ouvre l'onglet "weekly"
+  useEffect(() => {
+    if (activeTab === 'weekly' && weeksList.length > 0 && !selectedWeek) {
+      const today = new Date();
+      const currentWeek = weeksList.find(week => today >= week.start && today <= week.end);
+      if (currentWeek) {
+        setSelectedWeek(currentWeek);
+      }
+    }
+  }, [activeTab, weeksList, selectedWeek]);
+
   if (loading) return <div className="text-center py-10">Chargement des données...</div>;
 
   // Map utilisateurs
@@ -372,7 +383,7 @@ export default function Dons() {
                         <td colSpan="2" className="p-1 border">Total</td>
                         <td className="p-1 border text-right">{total} FCFA</td>
                         <td colSpan="4"></td>
-                      </tr>
+                      <tr>
                     </tfoot>
                   </table>
                 </div>
@@ -517,7 +528,7 @@ export default function Dons() {
         </button>
       </div>
 
-      {/* Contenu Engagements honorés */}
+      {/* Contenu Engagements honorés (inchangé) */}
       {activeTab === 'honored' && (
         <div className="space-y-3">
           {specialCategories.map(cat => {
@@ -607,7 +618,7 @@ export default function Dons() {
         </div>
       )}
 
-      {/* Contenu Soutiens des partenaires */}
+      {/* Contenu Soutiens des partenaires (inchangé) */}
       {activeTab === 'partners' && (
         <div>
           <div className="mb-4 relative">
@@ -630,7 +641,7 @@ export default function Dons() {
         </div>
       )}
 
-      {/* Contenu Dons de la semaine */}
+      {/* Contenu Dons de la semaine avec sélection automatique */}
       {activeTab === 'weekly' && (
         <div>
           <div className="mb-4">
