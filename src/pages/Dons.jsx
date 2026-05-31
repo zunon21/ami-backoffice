@@ -16,7 +16,6 @@ const formatDateTime = (isoString) => {
 const getWeeksOfYear = (year) => {
   const weeks = [];
   const firstDayOfYear = new Date(year, 0, 1);
-  // Trouver le premier lundi de l'année
   let firstMonday = new Date(firstDayOfYear);
   while (firstMonday.getDay() !== 1) {
     firstMonday.setDate(firstMonday.getDate() + 1);
@@ -51,12 +50,10 @@ export default function Dons() {
   const [expandedItem, setExpandedItem] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // États pour l'onglet "Dons de la semaine"
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [weeksList, setWeeksList] = useState([]);
 
-  // Auto-login admin
   useEffect(() => {
     const autoLogin = async () => {
       if (!localStorage.getItem('adminToken')) {
@@ -71,7 +68,6 @@ export default function Dons() {
     autoLogin();
   }, []);
 
-  // Charger les dons, utilisateurs et catégories
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -96,13 +92,11 @@ export default function Dons() {
     fetchData();
   }, [refreshKey]);
 
-  // Mettre à jour la liste des semaines quand l'année change
   useEffect(() => {
     setWeeksList(getWeeksOfYear(selectedYear));
     setSelectedWeek(null);
   }, [selectedYear]);
 
-  // Sélection automatique de la semaine en cours quand on ouvre l'onglet "weekly"
   useEffect(() => {
     if (activeTab === 'weekly' && weeksList.length > 0 && !selectedWeek) {
       const today = new Date();
@@ -115,7 +109,6 @@ export default function Dons() {
 
   if (loading) return <div className="text-center py-10">Chargement des données...</div>;
 
-  // Map utilisateurs
   const userMap = new Map();
   users.forEach(u => {
     userMap.set(u.id, { full_name: u.full_name, phone: u.phone, profile: u.UserProfile || {} });
@@ -123,9 +116,8 @@ export default function Dons() {
   const getUserInfo = (userId) => userMap.get(userId) || { full_name: '', phone: '', profile: {} };
 
   // ------------------------------------------------
-  // 1. Engagements honorés – structure par catégories
+  // 1. Engagements honorés (inchangé)
   // ------------------------------------------------
-
   const getSpecialDonations = (catName) => {
     if (catName === 'Fonctionnement de l\'AMI') {
       return donations.filter(d => d.description === 'Fonctionnement de l\'AMI');
@@ -165,6 +157,12 @@ export default function Dons() {
         }
         else if (col.field === 'organizationName') row[col.label] = d.extra_data?.organizationName || '';
         else if (col.field === 'destination') row[col.label] = d.extra_data?.destination || '';
+        else if (col.field === 'engagement') row[col.label] = d.description || 'Don AMI';
+        else if (col.field === 'received_amount') {
+          const amountNum = parseFloat(d.amount);
+          const received = amountNum * 0.97; // -3%
+          row[col.label] = `${received.toFixed(2)} FCFA`;
+        }
         else if (col.field === 'date') row[col.label] = date;
         else if (col.field === 'time') row[col.label] = time;
         else row[col.label] = d[col.field] || '';
@@ -279,7 +277,7 @@ export default function Dons() {
   };
 
   // ---------------------------------------------------------
-  // 2. Soutiens des partenaires
+  // 2. Soutiens des partenaires (inchangé)
   // ---------------------------------------------------------
   const userDonationsMap = new Map();
   donations.forEach(d => {
@@ -374,7 +372,7 @@ export default function Dons() {
                             <td className="p-1 border">{(d.payment_method || '').toUpperCase()}</td>
                             <td className="p-1 border">{date}</td>
                             <td className="p-1 border">{time}</td>
-                          </tr>
+                           </tr>
                         );
                       })}
                     </tbody>
@@ -383,7 +381,7 @@ export default function Dons() {
                         <td colSpan="2" className="p-1 border">Total</td>
                         <td className="p-1 border text-right">{total} FCFA</td>
                         <td colSpan="4"></td>
-                      <tr>
+                       </tr>
                     </tfoot>
                   </table>
                 </div>
@@ -398,14 +396,16 @@ export default function Dons() {
   const handleRefresh = () => setRefreshKey(prev => prev + 1);
 
   // ---------------------------------------------------------
-  // 3. Dons de la semaine
+  // 3. Dons de la semaine (avec les deux nouvelles colonnes)
   // ---------------------------------------------------------
   const weeklyColumns = [
     { field: '#', label: '#' },
     { field: 'full_name', label: 'Nom' },
     { field: 'first_name', label: 'Prénoms' },
+    { field: 'engagement', label: 'NOM DE L’ENGAGEMENT' },        // nouvelle colonne
     { field: 'phone', label: 'Téléphone' },
     { field: 'amount', label: 'Montant (FCFA)' },
+    { field: 'received_amount', label: 'Montant reçu (FCFA)' },    // nouvelle colonne
     { field: 'organizationName', label: 'Nom de l\'organisation' },
     { field: 'destination', label: 'Destinations des fonds' },
     { field: 'payment_method', label: 'Réseaux' },
@@ -432,6 +432,7 @@ export default function Dons() {
     if (weekDonations.length === 0) return <p className="text-gray-500">Aucun don pour cette semaine.</p>;
     const sorted = [...weekDonations].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
     const totalWeek = totalAmount(sorted);
+    const totalReceived = sorted.reduce((sum, d) => sum + (parseFloat(d.amount) * 0.97), 0);
     const handleExportWeek = () => exportDonationsToExcel(sorted, `Dons semaine ${selectedWeek.weekNumber} ${selectedYear}`, weeklyColumns);
     return (
       <div>
@@ -452,13 +453,17 @@ export default function Dons() {
                 const user = getUserInfo(d.user_id);
                 const { date, time } = formatDateTime(d.createdAt);
                 const missionnaire = d.description?.startsWith('Missionnaire - ') ? d.description.replace('Missionnaire - ', '') : '';
+                const amountNum = parseFloat(d.amount);
+                const received = amountNum * 0.97;
                 return (
                   <tr key={d.id} className="border-b">
                     <td className="p-2 text-center">{idx + 1}</td>
                     <td className="p-2">{user.full_name}</td>
                     <td className="p-2">{user.profile.first_name || ''}</td>
+                    <td className="p-2">{d.description || 'Don AMI'}</td>
                     <td className="p-2">{user.phone}</td>
                     <td className="p-2 text-right">{d.amount} FCFA</td>
+                    <td className="p-2 text-right text-gray-500">{received.toFixed(2)} FCFA</td> {/* couleur plus claire */}
                     <td className="p-2">{d.extra_data?.organizationName || ''}</td>
                     <td className="p-2">{d.extra_data?.destination || ''}</td>
                     <td className="p-2">{(d.payment_method || '').toUpperCase()}</td>
@@ -466,15 +471,17 @@ export default function Dons() {
                     <td className="p-2">{d.extra_data?.reason || ''}</td>
                     <td className="p-2">{date}</td>
                     <td className="p-2">{time}</td>
-                  </tr>
+                   </tr>
                 );
               })}
             </tbody>
             <tfoot className="bg-gray-50 font-bold">
               <tr>
-                <td colSpan={weeklyColumns.length - 1} className="p-2 text-right">Total de la semaine :</td>
+                <td colSpan={5} className="p-2 text-right">Total général :</td>
                 <td className="p-2 text-right">{totalWeek} FCFA</td>
-              </tr>
+                <td className="p-2 text-right">{totalReceived.toFixed(2)} FCFA</td>
+                <td colSpan={7}></td>
+               </tr>
             </tfoot>
           </table>
         </div>
@@ -494,7 +501,6 @@ export default function Dons() {
         </button>
       </div>
 
-      {/* Onglets */}
       <div className="flex border-b border-gray-200 mb-6">
         <button
           className={`py-2 px-6 font-medium text-sm focus:outline-none ${
@@ -528,7 +534,6 @@ export default function Dons() {
         </button>
       </div>
 
-      {/* Contenu Engagements honorés (inchangé) */}
       {activeTab === 'honored' && (
         <div className="space-y-3">
           {specialCategories.map(cat => {
@@ -618,7 +623,6 @@ export default function Dons() {
         </div>
       )}
 
-      {/* Contenu Soutiens des partenaires (inchangé) */}
       {activeTab === 'partners' && (
         <div>
           <div className="mb-4 relative">
@@ -641,7 +645,6 @@ export default function Dons() {
         </div>
       )}
 
-      {/* Contenu Dons de la semaine avec sélection automatique */}
       {activeTab === 'weekly' && (
         <div>
           <div className="mb-4">
